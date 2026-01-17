@@ -1,244 +1,235 @@
-# 中医智能舌诊助手 - Product Spec (修订版)
-
-## 修订说明
-
-> **原规格问题与修正**：
-> 1. ~~直接调用 Claude API~~ → Claude Artifact **无法发送外部网络请求**，改为**两阶段工作流**
-> 2. ~~API 密钥硬编码~~ → 不再需要，分析由 Claude 对话完成
-> 3. 确认 `window.storage` 为 Artifact 环境专用 API
-> 4. 简化技术复杂度，聚焦可行方案
-
----
+# 中医智能舌诊助手 - Product Spec (v3.0)
 
 ## 项目概述
 
 **项目名称**: 中医智能舌诊助手
-**部署环境**: Claude Artifact (需要 Claude Pro 订阅)
-**技术栈**: React + Tailwind CSS + window.storage
-**工作模式**: Artifact UI + Claude 对话分析（两阶段工作流）
+**目标**: 拍照分析舌象，判断体质，提供调理建议
+**用户**: 任何人，通过链接即可使用
+**费用**: **完全免费**
 
-### 两阶段工作流说明
+---
+
+## 技术方案
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Artifact 应用                           │
-│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐  │
-│  │ 拍照指导 │ → │ 拍照/选图 │ → │ 照片预览 │ → │ 导出图片 │  │
-│  └─────────┘    └─────────┘    └─────────┘    └────┬────┘  │
-│                                                     │       │
-│  ┌─────────┐    ┌─────────┐    ┌─────────┐         │       │
-│  │ 历史记录 │ ← │ 保存结果 │ ← │ 输入结果 │ ←───────┼───┐   │
-│  └─────────┘    └─────────┘    └─────────┘         │   │   │
-└─────────────────────────────────────────────────────┼───┼───┘
-                                                      │   │
-                    ┌─────────────────────────────────┼───┼───┐
-                    │         Claude 对话              │   │   │
-                    │                                  ▼   │   │
-                    │  用户发送照片 → Claude 分析 → 返回结果  │
-                    │                                  ↑   │   │
-                    │                                  └───┘   │
-                    └──────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                    用户手机浏览器                         │
+│  ┌─────────┐    ┌─────────┐    ┌─────────┐             │
+│  │  拍照    │ → │  分析中  │ → │  结果    │             │
+│  └─────────┘    └────┬────┘    └─────────┘             │
+└──────────────────────┼──────────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────────────────┐
+│              Vercel Serverless Function                  │
+│                  (API 代理，保护密钥)                      │
+└──────────────────────┼───────────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────────────────┐
+│              Google Gemini API (免费)                     │
+│                  分析图片，返回结果                        │
+└──────────────────────────────────────────────────────────┘
 ```
 
-**用户操作流程**：
-1. 在 Artifact 中查看拍照指导
-2. 拍照或选择舌头照片
-3. 将照片发送到 Claude 对话（长按保存/分享）
-4. Claude 自动分析并返回 JSON 结果
-5. 在 Artifact 中输入/粘贴结果并保存
-6. 查看历史记录和趋势
+### 费用明细
+
+| 项目 | 方案 | 费用 |
+|------|------|------|
+| 前端托管 | Vercel | 免费 |
+| 后端 API | Vercel Serverless | 免费 |
+| AI 分析 | Google Gemini API | 免费 (1500次/天) |
+| 域名 | xxx.vercel.app | 免费 |
+| 数据存储 | 浏览器 localStorage | 免费 |
+| **总计** | | **$0** |
 
 ---
 
 ## 一、核心功能
 
 ### 1. 拍照与上传
-- 调用设备摄像头拍摄舌头照片
+- 调用手机摄像头拍摄舌头照片
 - 支持从相册选择照片
-- 舌头形状引导框辅助对准
-- 图片自动压缩（最大 1024px，质量 85%）
-- **导出照片功能**（方便发送到 Claude 对话）
+- **舌头形状引导框**辅助对准
+- 图片自动压缩（最大 1024px，质量 80%）
 
-### 2. AI 分析（在 Claude 对话中完成）
-- 用户将照片发送到 Claude 对话
-- Claude 根据预设提示词分析舌象
-- 返回结构化 JSON 结果
-- **Artifact 提供"复制分析提示词"按钮**
+### 2. AI 分析（全自动）
+- 使用 Google Gemini 1.5 Flash（免费）
+- 分析维度：
+  - 舌色（淡白/淡红/红/绛/青紫）
+  - 舌形（胖大/正常/瘦小、齿痕、裂纹）
+  - 舌苔颜色（白/黄/灰/黑）
+  - 舌苔厚薄（薄/厚）
+  - 舌苔性质（润/燥/腻/腐）
+  - 体质类型（九种体质）
 
-### 3. 结果录入与展示
-- 提供结果输入界面（粘贴 JSON 或手动选择）
+### 3. 结果展示
 - 舌象特征标签化展示
 - 体质类型判断（带可信度）
-- 分类调理建议：
+- 调理建议：
   - 饮食建议
   - 生活方式
   - 穴位按摩
 - 医疗免责声明
 
 ### 4. 历史记录
-- 本地存储分析历史（最多 20 条）
+- 本地存储（浏览器 localStorage）
+- 最多保存 20 条记录
 - 按时间倒序展示
-- 支持查看详情
-- 支持删除记录
-- 支持导出记录
+- 支持查看详情、删除
 
 ### 5. 用户引导
 - 首次使用欢迎页
-- 拍照指导说明（光线、角度、距离）
-- 使用流程说明（含截图示意）
-- **分析提示词模板**
+- 拍照指导说明
+- 使用说明
 
 ---
 
 ## 二、技术架构
 
-### 2.1 前端技术
+### 2.1 前端
 ```
-框架: React (函数组件 + Hooks)
-样式: Tailwind CSS (Artifact 内置支持)
-图标: Lucide React (Artifact 内置支持)
-状态管理: React useState/useEffect
-```
-
-### 2.2 数据存储
-```
-方案: window.storage (Claude Artifact 持久化 API)
-用途:
-  - 欢迎页已读标记
-  - 历史记录列表
-  - 分析详情数据
-限制:
-  - 仅文本/JSON（不存储图片 base64，太大）
-  - 单个 key 最大 5MB
-  - 需要 try-catch 错误处理
+框架: React 18
+构建: Vite
+样式: Tailwind CSS
+图标: Lucide React
+路由: React Router (可选，或用状态管理)
 ```
 
-### 2.3 AI 分析（在 Claude 对话中）
+### 2.2 后端（Vercel Serverless）
 ```
-模型: Claude (通过对话界面)
-输入: 用户发送图片 + 预设提示词
+运行时: Node.js 18
+作用: 代理 Gemini API，保护 API Key
+路径: /api/analyze
+```
+
+### 2.3 AI 模型
+```
+提供商: Google
+模型: gemini-1.5-flash
+输入: 图片 base64 + 提示词
 输出: JSON 格式分析结果
-提示词: Artifact 提供复制按钮
+免费额度: 15次/分钟，1500次/天
 ```
 
-### 2.4 数据结构
-
-#### 历史记录列表
-```json
-Key: "tongue_history_list"
-Value: [
-  {
-    "id": "t_1737123456789",
-    "date": "2026-01-17",
-    "constitution": "痰湿质",
-    "confidence": "中等"
-  }
-]
+### 2.4 数据存储
 ```
-
-#### 分析详情
-```json
-Key: "tongue_detail_t_1737123456789"
-Value: {
-  "tongueColor": "淡白",
-  "tongueShape": "胖大",
-  "hasTeethMarks": true,
-  "hasCracks": false,
-  "coatingColor": "白",
-  "coatingThickness": "厚",
-  "coatingTexture": "腻",
-  "constitution": "痰湿质",
-  "confidence": "中等",
-  "features": ["舌体胖大", "舌边齿痕", "苔白厚腻"],
-  "healthStatus": "脾虚湿盛，可能容易疲劳，痰多",
-  "recommendations": {
-    "diet": ["薏米", "红小豆", "冬瓜", "茯苓"],
-    "lifestyle": ["加强有氧运动", "保持环境干燥", "避免久坐"],
-    "acupoints": ["丰隆穴", "阴陵泉", "足三里"]
-  },
-  "timestamp": "2026-01-17T12:00:00.000Z"
-}
-```
-
-**注意**：不存储图片 base64，避免存储空间耗尽。
-
----
-
-## 三、页面流程
-
-### 3.1 页面结构
-```
-welcome (欢迎页)
-  ↓
-home (主页)
-  ├─→ guide (拍照指导)
-  │     ↓
-  │   camera (拍照界面)
-  │     ↓
-  │   preview (照片预览 + 导出提示)
-  │
-  ├─→ input (结果录入页) ← 新增
-  │     ↓
-  │   result (结果展示)
-  │
-  ├─→ history (历史记录)
-  │     ↓
-  │   result (历史详情)
-  │
-  ├─→ prompt (提示词复制页) ← 新增
-  │
-  └─→ instructions (使用说明)
-```
-
-### 3.2 状态管理
-```javascript
-const [currentPage, setCurrentPage] = useState('welcome');
-const [capturedImage, setCapturedImage] = useState(null);
-const [analysisResult, setAnalysisResult] = useState(null);
-const [historyList, setHistoryList] = useState([]);
-const [isFirstVisit, setIsFirstVisit] = useState(true);
+方案: localStorage
+用途:
+  - 首次访问标记
+  - 历史记录列表
+  - 分析详情
+限制:
+  - 约 5MB 容量
+  - 仅限当前浏览器
+  - 清除浏览器数据会丢失
 ```
 
 ---
 
-## 四、核心代码实现
+## 三、项目结构
 
-### 4.1 图片压缩（保留）
+```
+tongue-diagnosis/
+├── public/
+│   └── favicon.ico
+├── src/
+│   ├── components/
+│   │   ├── WelcomePage.jsx      # 欢迎页
+│   │   ├── HomePage.jsx         # 主页
+│   │   ├── GuidePage.jsx        # 拍照指导
+│   │   ├── CameraPage.jsx       # 拍照界面
+│   │   ├── AnalyzingPage.jsx    # 分析中
+│   │   ├── ResultPage.jsx       # 结果页
+│   │   ├── HistoryPage.jsx      # 历史记录
+│   │   └── InstructionsPage.jsx # 使用说明
+│   ├── utils/
+│   │   ├── imageCompress.js     # 图片压缩
+│   │   ├── storage.js           # localStorage 封装
+│   │   └── api.js               # API 调用
+│   ├── App.jsx
+│   ├── index.css
+│   └── main.jsx
+├── api/
+│   └── analyze.js               # Vercel Serverless Function
+├── package.json
+├── vite.config.js
+├── tailwind.config.js
+├── vercel.json
+└── .env.local                   # 本地开发环境变量
+```
+
+---
+
+## 四、核心代码
+
+### 4.1 图片压缩
 ```javascript
-const compressImage = (file) => {
-  return new Promise((resolve) => {
+// src/utils/imageCompress.js
+export const compressImage = (file, maxSize = 1024, quality = 0.8) => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        let w = img.width;
-        let h = img.height;
-        const max = 1024;
+        let width = img.width;
+        let height = img.height;
 
-        if (w > h && w > max) {
-          h = (h * max) / w;
-          w = max;
-        } else if (h > max) {
-          w = (w * max) / h;
-          h = max;
+        // 按比例缩放
+        if (width > height && width > maxSize) {
+          height = (height * maxSize) / width;
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = (width * maxSize) / height;
+          height = maxSize;
         }
 
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // 返回 base64（不含前缀）
+        const base64 = canvas.toDataURL('image/jpeg', quality);
+        resolve(base64);
       };
+      img.onerror = reject;
       img.src = e.target.result;
     };
+    reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 };
 ```
 
-### 4.2 分析提示词模板
+### 4.2 API 调用
 ```javascript
-const ANALYSIS_PROMPT = `你是一位专业的中医舌诊专家。请仔细观察这张舌头照片，根据中医舌诊理论进行分析。
+// src/utils/api.js
+export const analyzeTongue = async (imageBase64) => {
+  const response = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: imageBase64 }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || '分析失败');
+  }
+
+  return response.json();
+};
+```
+
+### 4.3 Vercel Serverless Function
+```javascript
+// api/analyze.js
+export const config = {
+  maxDuration: 30,
+};
+
+const PROMPT = `你是一位专业的中医舌诊专家。请仔细观察这张舌头照片，根据中医舌诊理论进行分析。
 
 请按以下维度分析：
 1. 舌色：淡白/淡红/红/绛/青紫
@@ -253,512 +244,458 @@ const ANALYSIS_PROMPT = `你是一位专业的中医舌诊专家。请仔细观�
 {
   "tongueColor": "舌色",
   "tongueShape": "舌形",
-  "hasTeethMarks": true/false,
-  "hasCracks": true/false,
+  "hasTeethMarks": true或false,
+  "hasCracks": true或false,
   "coatingColor": "苔色",
-  "coatingThickness": "薄/厚",
+  "coatingThickness": "薄或厚",
   "coatingTexture": "润/燥/腻/腐",
   "constitution": "体质类型",
   "confidence": "高/中等/低",
-  "features": ["特征1", "特征2"],
-  "healthStatus": "健康状态描述",
+  "features": ["特征1", "特征2", "特征3"],
+  "healthStatus": "简短的健康状态描述",
   "recommendations": {
-    "diet": ["食物1", "食物2"],
-    "lifestyle": ["建议1", "建议2"],
-    "acupoints": ["穴位1", "穴位2"]
+    "diet": ["食物1", "食物2", "食物3", "食物4"],
+    "lifestyle": ["建议1", "建议2", "建议3"],
+    "acupoints": ["穴位1", "穴位2", "穴位3"]
   }
 }`;
 
-// 复制提示词功能
-const copyPrompt = async () => {
-  try {
-    await navigator.clipboard.writeText(ANALYSIS_PROMPT);
-    alert('提示词已复制！请发送照片到 Claude 对话，然后粘贴此提示词。');
-  } catch {
-    // Fallback: 显示提示词让用户手动复制
-    setShowPromptModal(true);
+export default async function handler(req, res) {
+  // 只允许 POST
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: '只支持 POST 请求' });
   }
-};
-```
 
-### 4.3 结果录入与解析
-```javascript
-// 解析用户输入的 JSON 结果
-const parseAnalysisResult = (input) => {
+  const { image } = req.body;
+
+  if (!image) {
+    return res.status(400).json({ message: '缺少图片数据' });
+  }
+
   try {
-    // 尝试提取 JSON
-    const jsonMatch = input.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[0]);
+    // 提取 base64 数据（去掉前缀）
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
-      // 验证必需字段
-      const requiredFields = ['tongueColor', 'constitution'];
-      const hasRequired = requiredFields.every(field => result[field]);
-
-      if (!hasRequired) {
-        throw new Error('缺少必需字段');
+    // 调用 Gemini API
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: 'image/jpeg',
+                    data: base64Data,
+                  },
+                },
+                {
+                  text: PROMPT,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.4,
+            maxOutputTokens: 1024,
+          },
+        }),
       }
+    );
 
-      return { success: true, data: result };
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Gemini API Error:', error);
+      return res.status(500).json({ message: 'AI 分析失败，请稍后重试' });
     }
-    throw new Error('未找到有效 JSON');
+
+    const data = await response.json();
+
+    // 提取文本内容
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      return res.status(500).json({ message: '未能获取分析结果' });
+    }
+
+    // 解析 JSON
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return res.status(500).json({ message: '结果解析失败' });
+    }
+
+    const result = JSON.parse(jsonMatch[0]);
+    return res.status(200).json(result);
+
   } catch (error) {
-    return { success: false, error: error.message };
+    console.error('Error:', error);
+    return res.status(500).json({ message: '服务器错误，请稍后重试' });
   }
-};
-
-// 手动选择模式（备选方案）
-const ManualInputForm = () => {
-  const [formData, setFormData] = useState({
-    tongueColor: '',
-    tongueShape: '',
-    hasTeethMarks: false,
-    hasCracks: false,
-    coatingColor: '',
-    coatingThickness: '',
-    coatingTexture: '',
-    constitution: '',
-  });
-
-  // ... 表单 UI
-};
+}
 ```
 
-### 4.4 持久化存储（修正版）
+### 4.4 localStorage 封装
 ```javascript
-// 存储键名常量
-const STORAGE_KEYS = {
+// src/utils/storage.js
+const KEYS = {
+  WELCOME_SEEN: 'tongue_welcome_seen',
   HISTORY_LIST: 'tongue_history_list',
   DETAIL_PREFIX: 'tongue_detail_',
-  WELCOME_SEEN: 'tongue_welcome_seen',
+};
+
+// 检查是否首次访问
+export const isFirstVisit = () => {
+  return !localStorage.getItem(KEYS.WELCOME_SEEN);
+};
+
+// 标记已访问
+export const markVisited = () => {
+  localStorage.setItem(KEYS.WELCOME_SEEN, 'true');
+};
+
+// 获取历史列表
+export const getHistoryList = () => {
+  try {
+    const data = localStorage.getItem(KEYS.HISTORY_LIST);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
 };
 
 // 保存分析结果
-const saveToHistory = async (analysis) => {
+export const saveAnalysis = (analysis, imageBase64) => {
   const id = `t_${Date.now()}`;
+  const timestamp = new Date().toISOString();
 
-  try {
-    // 保存详细信息（不含图片）
-    await window.storage.set(
-      `${STORAGE_KEYS.DETAIL_PREFIX}${id}`,
-      JSON.stringify({
-        ...analysis,
-        timestamp: new Date().toISOString()
-      })
-    );
+  // 保存详情（含压缩后的图片缩略图）
+  const detail = {
+    ...analysis,
+    image: imageBase64,
+    timestamp,
+  };
+  localStorage.setItem(`${KEYS.DETAIL_PREFIX}${id}`, JSON.stringify(detail));
 
-    // 更新列表
-    const newRecord = {
-      id,
-      date: new Date().toISOString().split('T')[0],
-      constitution: analysis.constitution,
-      confidence: analysis.confidence || '未知'
-    };
+  // 更新列表
+  const list = getHistoryList();
+  const newRecord = {
+    id,
+    date: timestamp.split('T')[0],
+    constitution: analysis.constitution,
+  };
+  const updatedList = [newRecord, ...list].slice(0, 20);
+  localStorage.setItem(KEYS.HISTORY_LIST, JSON.stringify(updatedList));
 
-    const updatedHistory = [newRecord, ...historyList].slice(0, 20);
-    setHistoryList(updatedHistory);
-
-    await window.storage.set(
-      STORAGE_KEYS.HISTORY_LIST,
-      JSON.stringify(updatedHistory)
-    );
-
-    return { success: true, id };
-  } catch (error) {
-    console.error('保存失败:', error);
-    return { success: false, error: error.message };
-  }
+  return id;
 };
 
-// 加载历史记录
-const loadHistory = async () => {
+// 获取分析详情
+export const getAnalysisDetail = (id) => {
   try {
-    const result = await window.storage.get(STORAGE_KEYS.HISTORY_LIST);
-    if (result && result.value) {
-      setHistoryList(JSON.parse(result.value));
-    }
-  } catch (error) {
-    console.error('加载历史失败:', error);
-    setHistoryList([]);
+    const data = localStorage.getItem(`${KEYS.DETAIL_PREFIX}${id}`);
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
   }
 };
 
 // 删除记录
-const deleteHistory = async (id) => {
-  try {
-    await window.storage.delete(`${STORAGE_KEYS.DETAIL_PREFIX}${id}`);
-    const updatedHistory = historyList.filter(item => item.id !== id);
-    setHistoryList(updatedHistory);
-    await window.storage.set(
-      STORAGE_KEYS.HISTORY_LIST,
-      JSON.stringify(updatedHistory)
-    );
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-};
-
-// 查看历史详情
-const viewHistoryDetail = async (id) => {
-  try {
-    const result = await window.storage.get(`${STORAGE_KEYS.DETAIL_PREFIX}${id}`);
-    if (result && result.value) {
-      const data = JSON.parse(result.value);
-      setAnalysisResult(data);
-      setCurrentPage('result');
-      return { success: true };
-    }
-    throw new Error('记录不存在');
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
+export const deleteAnalysis = (id) => {
+  localStorage.removeItem(`${KEYS.DETAIL_PREFIX}${id}`);
+  const list = getHistoryList().filter((item) => item.id !== id);
+  localStorage.setItem(KEYS.HISTORY_LIST, JSON.stringify(list));
 };
 ```
 
 ---
 
-## 五、新增页面设计
+## 五、页面设计
 
-### 5.1 照片预览页（增强版）
+### 5.1 页面流程
+```
+welcome (欢迎页，首次访问显示)
+  ↓
+home (主页)
+  ├─→ guide (拍照指导) → camera (拍照) → analyzing (分析中) → result (结果)
+  ├─→ history (历史记录) → result (历史详情)
+  └─→ instructions (使用说明)
+```
+
+### 5.2 主要页面
+
+#### 欢迎页
+- 产品介绍
+- 免责声明
+- "开始使用"按钮
+
+#### 主页
+- Logo + 标题
+- "开始舌诊"大按钮
+- "历史记录"入口
+- "使用说明"入口
+
+#### 拍照指导页
+- 光线要求：自然光最佳
+- 姿势要求：张口伸舌，舌体放松
+- 距离要求：20-30cm
+- "开始拍照"按钮
+
+#### 拍照页
+- 全屏相机预览
+- **舌头形状引导框**（椭圆虚线）
+- 拍照按钮
+- 相册选择按钮
+
+#### 分析中页
+- 加载动画
+- "AI 正在分析您的舌象..."
+- 分析小贴士轮播
+
+#### 结果页
+- 舌头照片缩略图
+- 舌象特征标签（舌色、舌形、舌苔等）
+- 体质类型卡片（大字显示）
+- 调理建议分类展示
+- 免责声明
+- "保存到历史"按钮
+- "重新分析"按钮
+
+#### 历史记录页
+- 记录列表（日期 + 体质类型）
+- 点击查看详情
+- 左滑删除
+
+---
+
+## 六、舌头引导框
+
 ```jsx
-const PreviewPage = () => (
-  <div className="flex flex-col h-full">
-    <header className="p-4 text-center">
-      <h1 className="text-xl font-bold">照片预览</h1>
-    </header>
+// 拍照页的引导框组件
+const TongueGuide = () => (
+  <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+    {/* 半透明遮罩 */}
+    <defs>
+      <mask id="tongueMask">
+        <rect width="100" height="100" fill="white" />
+        <ellipse cx="50" cy="50" rx="25" ry="35" fill="black" />
+      </mask>
+    </defs>
+    <rect width="100" height="100" fill="rgba(0,0,0,0.5)" mask="url(#tongueMask)" />
 
-    <main className="flex-1 p-4">
-      <img
-        src={capturedImage}
-        alt="舌头照片"
-        className="w-full rounded-xl"
-      />
+    {/* 引导框 */}
+    <ellipse
+      cx="50"
+      cy="50"
+      rx="25"
+      ry="35"
+      fill="none"
+      stroke="white"
+      strokeWidth="0.5"
+      strokeDasharray="2,1"
+      className="animate-pulse"
+    />
 
-      {/* 操作提示 */}
-      <div className="mt-4 p-4 bg-amber-50 rounded-xl">
-        <p className="text-amber-800 text-sm">
-          <strong>下一步：</strong>
-        </p>
-        <ol className="text-amber-700 text-sm mt-2 space-y-1">
-          <li>1. 长按上方图片，保存到相册</li>
-          <li>2. 返回 Claude 对话，发送照片</li>
-          <li>3. 复制下方提示词，粘贴发送</li>
-          <li>4. 收到分析结果后，点击"录入结果"</li>
-        </ol>
-      </div>
-    </main>
-
-    <footer className="p-4 space-y-3">
-      <button
-        onClick={copyPrompt}
-        className="w-full py-3 bg-emerald-500 text-white rounded-xl"
-      >
-        复制分析提示词
-      </button>
-      <button
-        onClick={() => setCurrentPage('input')}
-        className="w-full py-3 bg-blue-500 text-white rounded-xl"
-      >
-        录入分析结果
-      </button>
-      <button
-        onClick={() => setCurrentPage('camera')}
-        className="w-full py-3 border border-gray-300 rounded-xl"
-      >
-        重新拍照
-      </button>
-    </footer>
-  </div>
+    {/* 提示文字 */}
+    <text x="50" y="90" textAnchor="middle" fill="white" fontSize="4">
+      将舌头对准框内
+    </text>
+  </svg>
 );
 ```
 
-### 5.2 结果录入页（新增）
-```jsx
-const InputPage = () => {
-  const [inputText, setInputText] = useState('');
-  const [parseError, setParseError] = useState(null);
-  const [inputMode, setInputMode] = useState('json'); // 'json' | 'manual'
+---
 
-  const handleSubmit = () => {
-    if (inputMode === 'json') {
-      const result = parseAnalysisResult(inputText);
-      if (result.success) {
-        setAnalysisResult(result.data);
-        setCurrentPage('result');
-      } else {
-        setParseError(result.error);
-      }
-    }
-  };
+## 七、设计规范
 
-  return (
-    <div className="flex flex-col h-full">
-      <header className="p-4">
-        <button onClick={() => setCurrentPage('preview')}>返回</button>
-        <h1 className="text-xl font-bold text-center">录入分析结果</h1>
-      </header>
+### 色彩
+```css
+主色: #10B981 (emerald-500) - 健康、中医
+辅色: #3B82F6 (blue-500) - 科技感
+背景: #F9FAFB (gray-50)
+文字: #111827 (gray-900)
 
-      <main className="flex-1 p-4 overflow-auto">
-        {/* 切换输入模式 */}
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => setInputMode('json')}
-            className={`flex-1 py-2 rounded-lg ${
-              inputMode === 'json'
-                ? 'bg-emerald-500 text-white'
-                : 'bg-gray-100'
-            }`}
-          >
-            粘贴 JSON
-          </button>
-          <button
-            onClick={() => setInputMode('manual')}
-            className={`flex-1 py-2 rounded-lg ${
-              inputMode === 'manual'
-                ? 'bg-emerald-500 text-white'
-                : 'bg-gray-100'
-            }`}
-          >
-            手动填写
-          </button>
-        </div>
+/* 体质颜色 */
+平和质: emerald
+气虚质: yellow
+阳虚质: blue
+阴虚质: red
+痰湿质: purple
+湿热质: orange
+血瘀质: indigo
+气郁质: pink
+特禀质: gray
+```
 
-        {inputMode === 'json' ? (
-          <>
-            <p className="text-sm text-gray-600 mb-2">
-              将 Claude 返回的 JSON 结果粘贴到下方：
-            </p>
-            <textarea
-              value={inputText}
-              onChange={(e) => {
-                setInputText(e.target.value);
-                setParseError(null);
-              }}
-              placeholder='{"tongueColor": "淡红", ...}'
-              className="w-full h-48 p-3 border rounded-xl text-sm font-mono"
-            />
-            {parseError && (
-              <p className="text-red-500 text-sm mt-2">
-                解析错误：{parseError}
-              </p>
-            )}
-          </>
-        ) : (
-          <ManualInputForm
-            onSubmit={(data) => {
-              setAnalysisResult(data);
-              setCurrentPage('result');
-            }}
-          />
-        )}
-      </main>
+### 字体
+```css
+标题: text-2xl font-bold
+副标题: text-xl font-semibold
+正文: text-base
+小字: text-sm
+说明: text-xs text-gray-500
+```
 
-      {inputMode === 'json' && (
-        <footer className="p-4">
-          <button
-            onClick={handleSubmit}
-            disabled={!inputText.trim()}
-            className="w-full py-3 bg-emerald-500 text-white rounded-xl disabled:opacity-50"
-          >
-            解析并查看结果
-          </button>
-        </footer>
-      )}
-    </div>
-  );
+### 圆角
+```css
+按钮: rounded-xl (12px)
+卡片: rounded-2xl (16px)
+标签: rounded-full
+```
+
+---
+
+## 八、部署步骤
+
+### 1. 获取 Gemini API Key
+1. 访问 [Google AI Studio](https://aistudio.google.com/)
+2. 登录 Google 账号
+3. 点击 "Get API Key"
+4. 创建新的 API Key
+5. 复制保存
+
+### 2. 部署到 Vercel
+```bash
+# 1. 安装 Vercel CLI
+npm i -g vercel
+
+# 2. 登录
+vercel login
+
+# 3. 部署
+vercel
+
+# 4. 设置环境变量
+vercel env add GEMINI_API_KEY
+# 粘贴你的 API Key
+
+# 5. 重新部署
+vercel --prod
+```
+
+### 3. 访问
+部署完成后会得到一个链接：
+```
+https://your-project.vercel.app
+```
+
+分享这个链接，任何人都可以使用！
+
+---
+
+## 九、配置文件
+
+### package.json
+```json
+{
+  "name": "tongue-diagnosis",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "lucide-react": "^0.300.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "vite": "^5.0.0"
+  }
+}
+```
+
+### vite.config.js
+```javascript
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+});
+```
+
+### tailwind.config.js
+```javascript
+export default {
+  content: ['./index.html', './src/**/*.{js,jsx}'],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
 };
 ```
 
----
-
-## 六、设计规范（保持原有）
-
-### 6.1 色彩系统
-```css
-/* 主色 */
---primary: #10B981 (emerald-500)
---secondary: #3B82F6 (blue-500)
-
-/* 体质颜色映射 */
-平和质: bg-green-100 text-green-700
-气虚质: bg-yellow-100 text-yellow-700
-阳虚质: bg-blue-100 text-blue-700
-阴虚质: bg-red-100 text-red-700
-痰湿质: bg-purple-100 text-purple-700
-湿热质: bg-orange-100 text-orange-700
-血瘀质: bg-indigo-100 text-indigo-700
-气郁质: bg-pink-100 text-pink-700
-特禀质: bg-gray-100 text-gray-700
+### vercel.json
+```json
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite"
+}
 ```
 
-### 6.2 字体与间距（保持原有）
-参见原文档第五章。
+---
+
+## 十、注意事项
+
+### 安全
+- API Key 只存在服务端，用户看不到
+- 不收集用户数据，全部存在用户本地
+
+### 限制
+- Gemini 免费额度：15次/分钟，1500次/天
+- 超过限制会返回错误，提示用户稍后再试
+- localStorage 约 5MB，足够存 20 条记录
+
+### 免责
+- 每个结果页必须显示医疗免责声明
+- 欢迎页需要用户确认知晓
 
 ---
 
-## 七、舌头引导框设计（保持原有）
+## 十一、开发检查清单
 
-参见原文档第六章。
+### Phase 1: 项目搭建
+- [ ] 初始化 Vite + React 项目
+- [ ] 配置 Tailwind CSS
+- [ ] 安装 Lucide React
 
----
-
-## 八、中医知识库（保持原有）
-
-参见原文档第七章。
-
----
-
-## 九、关键注意事项（更新版）
-
-### 9.1 Artifact 环境限制
-```
-❌ 禁止：
-- 外部 API 调用（fetch 到外部域名）
-- localStorage / sessionStorage
-- 第三方 CDN 资源
-
-✅ 可用：
-- window.storage（Artifact 专用）
-- React 内置功能
-- Tailwind CSS（内置）
-- Lucide React（内置）
-- navigator.clipboard（剪贴板）
-- 设备摄像头（通过 input type="file"）
-```
-
-### 9.2 用户体验优化
-- 清晰的步骤引导（两阶段工作流）
-- 提示词一键复制
-- JSON 解析容错（自动提取 {} 内容）
-- 手动输入备选方案
-- 历史记录不存储图片（节省空间）
-
-### 9.3 医疗免责
-**每个分析结果必须包含**：
-- "本分析仅供参考，不能替代专业医疗诊断"
-- 首次使用显示完整免责声明
-- 结果页底部显示免责提示
-
----
-
-## 十、开发检查清单（更新版）
-
-### Phase 1: 基础框架
-- [ ] React 组件结构搭建
-- [ ] 页面状态管理
-- [ ] Tailwind CSS 样式
-- [ ] Lucide React 图标
-
-### Phase 2: 拍照功能
-- [ ] 文件选择器（相机/相册）
-- [ ] 舌头引导框 SVG
-- [ ] 图片压缩算法
-- [ ] 照片预览界面
-- [ ] 图片长按保存提示
-
-### Phase 3: 结果录入（新增）
-- [ ] JSON 粘贴输入
-- [ ] JSON 解析与验证
-- [ ] 手动填写表单
-- [ ] 表单验证
-
-### Phase 4: 分析提示词
-- [ ] 提示词模板定义
-- [ ] 一键复制功能
-- [ ] 复制失败时显示弹窗
-
-### Phase 5: 结果展示
-- [ ] 舌象特征卡片
-- [ ] 体质类型判断
-- [ ] 调理建议分类
-- [ ] 免责声明展示
-- [ ] 保存到历史按钮
-
-### Phase 6: 数据持久化
-- [ ] window.storage 封装
-- [ ] 历史记录保存
-- [ ] 历史记录读取
-- [ ] 删除功能实现
-
-### Phase 7: 用户引导
-- [ ] 欢迎页设计
+### Phase 2: 页面开发
+- [ ] 欢迎页
+- [ ] 主页
 - [ ] 拍照指导页
-- [ ] 使用说明页（含两阶段流程）
-- [ ] 首次使用标记
+- [ ] 拍照页（含引导框）
+- [ ] 分析中页
+- [ ] 结果页
+- [ ] 历史记录页
+- [ ] 使用说明页
 
-### Phase 8: 测试
-- [ ] Artifact 环境测试
-- [ ] window.storage 测试
-- [ ] 图片拍摄测试
-- [ ] JSON 解析测试
-- [ ] 错误处理测试
+### Phase 3: 功能开发
+- [ ] 图片压缩
+- [ ] localStorage 封装
+- [ ] API 调用
 
----
+### Phase 4: 后端开发
+- [ ] Vercel Serverless Function
+- [ ] Gemini API 集成
+- [ ] 错误处理
 
-## 十一、使用说明（用户视角）
-
-### 快速开始
-
-1. **准备拍照**
-   - 找一个光线充足的地方
-   - 自然光最佳，避免强烈灯光
-
-2. **拍摄舌头**
-   - 点击"开始舌诊"
-   - 查看拍照指导
-   - 张口伸舌，对准引导框
-   - 拍摄或从相册选择
-
-3. **发送到 Claude**
-   - 长按照片，保存到相册
-   - 返回 Claude 对话
-   - 发送照片
-   - 复制提示词，粘贴发送
-
-4. **录入结果**
-   - 等待 Claude 返回分析结果
-   - 复制 JSON 结果
-   - 返回 Artifact，点击"录入结果"
-   - 粘贴 JSON，点击解析
-
-5. **查看与保存**
-   - 查看舌象分析和调理建议
-   - 点击"保存到历史"
-   - 随时在历史记录中查看
+### Phase 5: 部署
+- [ ] 获取 Gemini API Key
+- [ ] 部署到 Vercel
+- [ ] 配置环境变量
+- [ ] 测试完整流程
 
 ---
 
-## 十二、常见问题
-
-### Q: 为什么不能直接在 App 内分析？
-A: Claude Artifact 环境出于安全考虑，不允许调用外部 API。通过 Claude 对话分析是目前最简单可行的方案。
-
-### Q: JSON 解析失败怎么办？
-A: 可以切换到"手动填写"模式，根据 Claude 的文字描述手动选择各项特征。
-
-### Q: 历史记录为什么没有保存图片？
-A: 为了节省存储空间。每张图片 base64 编码后约 500KB-2MB，20 条记录会很快耗尽 5MB 限制。
-
-### Q: 分析结果准确吗？
-A: 本工具仅供参考，不能替代专业医疗诊断。如有健康问题，请咨询专业中医师。
-
----
-
-**文档版本**: v2.0
+**文档版本**: v3.0
 **最后更新**: 2026年1月17日
-**修订者**: Claude
-**基于原版本**: v1.0 by Claude AI Assistant
-
----
-
-## 附录：与原规格的差异对照
-
-| 原规格 | 修订版 | 原因 |
-|-------|-------|------|
-| 直接调用 Claude API | 两阶段工作流 | Artifact 无法发送外部请求 |
-| 存储图片 base64 | 不存储图片 | 节省 window.storage 空间 |
-| API 分析页面 | 结果录入页面 | 改为手动输入分析结果 |
-| 单一流程 | 双流程（Artifact + 对话） | 适应环境限制 |
-| package.json | 不需要 | Artifact 内置依赖 |
-| 独立部署 | Artifact 部署 | 明确部署方式 |
+**方案**: Vercel + Google Gemini (完全免费)
