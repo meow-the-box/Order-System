@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 // Components
 import WelcomePage from './components/WelcomePage';
@@ -44,6 +44,7 @@ export default function App() {
   const [historyList, setHistoryList] = useState([]);
   const [isSaved, setIsSaved] = useState(false);
   const [isFromHistory, setIsFromHistory] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false); // TC-09: 防重复点击
   const [error, setError] = useState(null);
 
   // Load history on mount
@@ -62,28 +63,50 @@ export default function App() {
     setCurrentPage(PAGES.GUIDE);
   };
 
-  // Handle camera capture
-  const handleCapture = async (file) => {
+  // Handle camera capture - TC-09: 防重复点击
+  const handleCapture = useCallback(async (file) => {
+    // 防止重复提交
+    if (isAnalyzing) {
+      console.log('Already analyzing, ignoring...');
+      return;
+    }
+
+    setIsAnalyzing(true);
+
     try {
-      // Compress image
-      const compressed = await compressImage(file, 1024, 0.8);
+      // TC-05: 更激进的压缩 (800px, 质量0.7)
+      const compressed = await compressImage(file, 800, 0.7);
       setCapturedImage(compressed);
       setCurrentPage(PAGES.ANALYZING);
       setIsSaved(false);
       setIsFromHistory(false);
       setError(null);
 
-      // Analyze
-      const result = await analyzeTongue(compressed);
-      setAnalysisResult(result);
-      setCurrentPage(PAGES.RESULT);
+      // TC-06: 添加超时控制 (25秒)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+      try {
+        const result = await analyzeTongue(compressed, controller.signal);
+        clearTimeout(timeoutId);
+        setAnalysisResult(result);
+        setCurrentPage(PAGES.RESULT);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          throw new Error('分析超时，请检查网络后重试');
+        }
+        throw err;
+      }
     } catch (err) {
       console.error('Analysis error:', err);
       setError(err.message || '分析失败，请重试');
       alert(err.message || '分析失败，请重试');
       setCurrentPage(PAGES.CAMERA);
+    } finally {
+      setIsAnalyzing(false);
     }
-  };
+  }, [isAnalyzing]);
 
   // Handle save
   const handleSave = () => {
@@ -164,6 +187,7 @@ export default function App() {
           <CameraPage
             onBack={() => setCurrentPage(PAGES.GUIDE)}
             onCapture={handleCapture}
+            isAnalyzing={isAnalyzing}
           />
         );
 

@@ -5,24 +5,32 @@ export const config = {
   maxDuration: 30, // 30 seconds timeout
 };
 
-const PROMPT = `你是一位专业的中医舌诊专家。请仔细观察这张舌头照片，根据中医舌诊理论进行分析。
+const PROMPT = `你是一位专业的中医舌诊专家。请仔细观察这张照片。
 
-请按以下维度分析：
-1. 舌色：淡白/淡红/红/绛/青紫
-2. 舌形：胖大/正常/瘦小，是否有齿痕/裂纹
-3. 舌苔颜色：白/黄/灰/黑
-4. 舌苔厚薄：薄/厚
-5. 舌苔性质：润/燥/腻/腐
-6. 判断最可能的体质类型（平和质/气虚质/阳虚质/阴虚质/痰湿质/湿热质/血瘀质/气郁质/特禀质）
-7. 给出饮食、生活方式、穴位按摩建议
+**首先判断**：
+1. 这是否是一张清晰的舌头照片？如果不是舌头（如手指、桌面、其他物体），必须返回 isValidTongue: false
+2. 照片光线是否正常？是否有明显偏色（过曝、偏黄、偏蓝等）？
+
+**如果是有效的舌头照片**，请根据中医舌诊理论分析：
+- 舌色：淡白/淡红/红/绛/青紫
+- 舌形：胖大/正常/瘦小，是否有齿痕/裂纹
+- 舌苔颜色：白/黄/灰/黑
+- 舌苔厚薄：薄/厚
+- 舌苔性质：润/燥/腻/腐
+- 体质类型（九种之一）
+- 调理建议
 
 请只返回 JSON 格式，不要其他文字：
 {
-  "tongueColor": "舌色（淡白/淡红/红/绛/青紫）",
-  "tongueShape": "舌形（胖大/正常/瘦小）",
+  "isValidTongue": true或false,
+  "invalidReason": "如果不是有效舌头照片，说明原因（如：这不是舌头照片/照片模糊/光线不足）",
+  "hasLightingIssue": true或false,
+  "lightingWarning": "如果光线有问题，给出提示（如：照片偏黄，可能影响判断准确性，建议在自然光下重新拍摄）",
+  "tongueColor": "舌色",
+  "tongueShape": "舌形",
   "hasTeethMarks": true或false,
   "hasCracks": true或false,
-  "coatingColor": "苔色（白/黄/灰/黑）",
+  "coatingColor": "苔色",
   "coatingThickness": "薄或厚",
   "coatingTexture": "润/燥/腻/腐",
   "constitution": "体质类型",
@@ -69,9 +77,9 @@ export default async function handler(req, res) {
     // Extract base64 data (remove prefix if present)
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
-    // Call Gemini API (using gemini-2.0-flash model)
+    // Call Gemini API
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
@@ -123,14 +131,28 @@ export default async function handler(req, res) {
       const errorText = await response.text();
       console.error('Gemini API Error:', response.status, errorText);
 
-      // Handle rate limiting
-      if (response.status === 429) {
-        return res.status(429).json({
-          message: '请求太频繁，请稍后再试（每分钟限制 15 次）',
-        });
+      // Parse error for better messages
+      let errorMessage = 'AI 分析失败，请稍后重试';
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error?.message) {
+          console.error('Gemini Error Detail:', errorData.error.message);
+        }
+      } catch (e) {
+        // ignore parse error
       }
 
-      return res.status(500).json({ message: 'AI 分析失败，请稍后重试' });
+      if (response.status === 429) {
+        errorMessage = '请求太频繁，请稍后再试（每分钟限制 15 次）';
+      } else if (response.status === 400) {
+        errorMessage = '图片格式不支持，请使用 JPG/PNG 格式';
+      } else if (response.status === 403) {
+        errorMessage = 'API 密钥无效或已过期';
+      } else if (response.status === 404) {
+        errorMessage = 'AI 服务暂时不可用，请稍后重试';
+      }
+
+      return res.status(response.status).json({ message: errorMessage });
     }
 
     const data = await response.json();
@@ -158,6 +180,14 @@ export default async function handler(req, res) {
 
     try {
       const result = JSON.parse(jsonMatch[0]);
+
+      // TC-04: Check if it's a valid tongue image
+      if (result.isValidTongue === false) {
+        return res.status(400).json({
+          message: result.invalidReason || '请上传清晰的舌头照片',
+          isInvalidImage: true,
+        });
+      }
 
       // Validate required fields
       if (!result.constitution || !result.tongueColor) {
