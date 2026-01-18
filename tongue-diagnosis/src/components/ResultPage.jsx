@@ -48,6 +48,14 @@ export default function ResultPage({
           </div>
         )}
 
+        {/* TC-10: Lighting Warning */}
+        {result.hasLightingIssue && result.lightingWarning && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 flex gap-2">
+            <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+            <p className="text-sm text-amber-700">{result.lightingWarning}</p>
+          </div>
+        )}
+
         {/* Constitution Card */}
         <div className={`${colors.bg} ${colors.border} border rounded-2xl p-6 mb-4`}>
           <p className="text-sm text-gray-600 mb-1">您的体质类型</p>
@@ -154,18 +162,23 @@ export default function ResultPage({
           </div>
         )}
 
-        {/* Disclaimer */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800">
-            <strong>免责声明：</strong>本分析结果仅供参考，不能替代专业医疗诊断。如有健康问题，请咨询专业医师。
-          </p>
+        {/* TC-11: Prominent Disclaimer */}
+        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-4">
+          <div className="flex gap-3">
+            <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0" />
+            <div>
+              <p className="font-semibold text-red-800 mb-1">重要提示</p>
+              <p className="text-sm text-red-700">
+                本分析结果由 AI 生成，仅供健康参考，<strong>不构成医疗诊断建议</strong>。如有身体不适，请及时就医咨询专业医师。
+              </p>
+            </div>
+          </div>
         </div>
       </main>
 
-      {/* Bottom Actions */}
+      {/* TC-03: Bottom Actions with safe area */}
       {!isFromHistory && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-8 flex gap-3">
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 safe-area-bottom flex gap-3">
           <button
             onClick={onRetry}
             className="flex-1 py-3 px-4 border border-gray-300 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
