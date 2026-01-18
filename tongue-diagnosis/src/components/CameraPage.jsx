@@ -25,59 +25,35 @@ export default function CameraPage({ onBack, onCapture }) {
       </header>
 
       {/* Camera View Area */}
-      <main className="flex-1 flex items-center justify-center relative">
+      <main className="flex-1 flex items-center justify-center relative overflow-hidden">
         {/* Background placeholder */}
         <div className="absolute inset-0 bg-gradient-to-b from-gray-800 to-gray-900" />
 
-        {/* Tongue Guide Overlay */}
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox="0 0 100 150"
-          preserveAspectRatio="xMidYMid slice"
-        >
-          {/* Semi-transparent mask */}
-          <defs>
-            <mask id="tongueMask">
-              <rect width="100" height="150" fill="white" />
-              <ellipse cx="50" cy="70" rx="28" ry="38" fill="black" />
-            </mask>
-          </defs>
-          <rect
-            width="100"
-            height="150"
-            fill="rgba(0,0,0,0.6)"
-            mask="url(#tongueMask)"
-          />
+        {/* Tongue Guide Overlay - More visible */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          {/* Dark overlay with cutout */}
+          <div className="relative w-64 h-80">
+            {/* Guide frame */}
+            <div
+              className="absolute inset-0 border-4 border-white border-dashed rounded-[50%] opacity-80"
+              style={{
+                boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.6)',
+                animation: 'pulse 2s infinite'
+              }}
+            />
 
-          {/* Guide ellipse */}
-          <ellipse
-            cx="50"
-            cy="70"
-            rx="28"
-            ry="38"
-            fill="none"
-            stroke="white"
-            strokeWidth="0.5"
-            strokeDasharray="3,2"
-            className="animate-pulse"
-          />
+            {/* Corner markers */}
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-emerald-400 rounded-full" />
+            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-emerald-400 rounded-full" />
+            <div className="absolute top-1/2 -left-2 -translate-y-1/2 w-1 h-8 bg-emerald-400 rounded-full" />
+            <div className="absolute top-1/2 -right-2 -translate-y-1/2 w-1 h-8 bg-emerald-400 rounded-full" />
+          </div>
+        </div>
 
-          {/* Guide text */}
-          <text
-            x="50"
-            y="120"
-            textAnchor="middle"
-            fill="white"
-            fontSize="4"
-            opacity="0.8"
-          >
-            将舌头对准框内
-          </text>
-        </svg>
-
-        {/* Center prompt */}
-        <div className="relative z-10 text-center">
-          <p className="text-white/60 text-sm">点击下方按钮选择照片</p>
+        {/* Guide text */}
+        <div className="absolute bottom-32 left-0 right-0 text-center z-10">
+          <p className="text-white text-lg font-medium mb-2">将舌头对准框内</p>
+          <p className="text-white/60 text-sm">点击下方按钮拍照或选择照片</p>
         </div>
       </main>
 
