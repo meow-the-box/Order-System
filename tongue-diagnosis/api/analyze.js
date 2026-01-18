@@ -69,9 +69,9 @@ export default async function handler(req, res) {
     // Extract base64 data (remove prefix if present)
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
-    // Call Gemini API (using gemini-2.0-flash model)
+    // Call Gemini API
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
@@ -123,14 +123,28 @@ export default async function handler(req, res) {
       const errorText = await response.text();
       console.error('Gemini API Error:', response.status, errorText);
 
-      // Handle rate limiting
-      if (response.status === 429) {
-        return res.status(429).json({
-          message: '请求太频繁，请稍后再试（每分钟限制 15 次）',
-        });
+      // Parse error for better messages
+      let errorMessage = 'AI 分析失败，请稍后重试';
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error?.message) {
+          console.error('Gemini Error Detail:', errorData.error.message);
+        }
+      } catch (e) {
+        // ignore parse error
       }
 
-      return res.status(500).json({ message: 'AI 分析失败，请稍后重试' });
+      if (response.status === 429) {
+        errorMessage = '请求太频繁，请稍后再试（每分钟限制 15 次）';
+      } else if (response.status === 400) {
+        errorMessage = '图片格式不支持，请使用 JPG/PNG 格式';
+      } else if (response.status === 403) {
+        errorMessage = 'API 密钥无效或已过期';
+      } else if (response.status === 404) {
+        errorMessage = 'AI 服务暂时不可用，请稍后重试';
+      }
+
+      return res.status(response.status).json({ message: errorMessage });
     }
 
     const data = await response.json();
